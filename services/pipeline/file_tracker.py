@@ -41,7 +41,22 @@ class FileTracker:
         }
         self._save_state()
 
-    SUPPORTED_EXTENSIONS = {".md", ".docx", ".doc", ".pdf"}
+    SUPPORTED_EXTENSIONS = {
+        ".md",
+        ".docx",
+        ".doc",
+        ".pdf",
+        ".pptx",
+        ".mp3",
+        ".wav",
+        ".m4a",
+        ".mp4",
+        ".mov",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".webp",
+    }
 
     def get_pending_files(self, directory: str) -> list[str]:
         pending = []
@@ -129,7 +144,7 @@ def run_git_diff_scan(vault_path: Path, ignore_patterns: list[str]) -> list[str]
         if should_ignore(path, vault_path, ignore_patterns):
             continue
         ext = path.suffix.lower()
-        if ext in {".docx", ".doc", ".pdf"}:
+        if ext in {".docx", ".doc", ".pdf", ".pptx", ".mp3", ".wav", ".m4a", ".mp4", ".mov", ".png", ".jpg", ".jpeg", ".webp"}:
             conv = converter.convert(str(path))
             if conv.get("success"):
                 changed.append(conv["output_path"])

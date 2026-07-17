@@ -3,14 +3,32 @@
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- 用户（小程序 / JWT 关联，Phase 6+ 使用）
+-- 用户（JWT 鉴权 + 小程序 external_id 关联）
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    external_id VARCHAR(128) UNIQUE NOT NULL,
+    external_id VARCHAR(128) UNIQUE,
+    username VARCHAR(50) UNIQUE,
+    password_hash VARCHAR(255),
+    role VARCHAR(20) DEFAULT 'student',
     nickname VARCHAR(128),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 文档元数据（流水线状态跟踪）
+CREATE TABLE IF NOT EXISTS documents (
+    id SERIAL PRIMARY KEY,
+    file_path VARCHAR(512) UNIQUE NOT NULL,
+    subject VARCHAR(20),
+    doc_type VARCHAR(30),
+    status VARCHAR(20) DEFAULT 'pending',
+    review_errors JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
+CREATE INDEX IF NOT EXISTS idx_documents_subject ON documents(subject);
 
 -- 音频资源元数据（生产环境替代 data/audio_seed.json）
 CREATE TABLE IF NOT EXISTS audio_assets (

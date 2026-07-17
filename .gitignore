@@ -10,6 +10,7 @@ venv/
 
 # Data
 configs/pipeline_state.json
+vault/_converted/
 vault/.obsidian/
 vault/9_数据流水线/logs/*
 !vault/9_数据流水线/logs/.gitkeep

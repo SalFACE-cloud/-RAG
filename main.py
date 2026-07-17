@@ -21,6 +21,7 @@ def print_help():
   python main.py pipeline       # Phase1 基础设施 + Phase2 流水线（一键）
   python main.py worker         # 启动 RQ Worker（Phase 2 任务队列）
   python main.py enqueue        # 将待处理文件入队
+  python main.py retry-failed   # 列出/重试失败任务（可加 --retry）
   python main.py api            # 启动 FastAPI 服务
 
 API: Swagger http://localhost:8000/docs
@@ -67,8 +68,14 @@ def main():
         run_worker(burst="--burst" in sys.argv)
     elif cmd == "enqueue":
         from services.pipeline.main import enqueue_changed_files
+
         job_ids = enqueue_changed_files()
         print(f"已入队 {len(job_ids)} 个任务")
+    elif cmd == "retry-failed":
+        sys.argv = [sys.argv[0]] + sys.argv[2:]
+        from scripts.retry_failed import main as retry_main
+
+        raise SystemExit(retry_main())
     else:
         print(f"未知命令: {cmd}")
         print_help()

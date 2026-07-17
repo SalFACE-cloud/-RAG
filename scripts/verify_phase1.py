@@ -1,4 +1,4 @@
-"""Phase 1 基础设施验收（检查已运行的 Docker 服务）。"""
+"""Phase 1 基础设施验收（Docker 服务 + PostgreSQL 表结构）。"""
 import json
 import sys
 import time
@@ -10,6 +10,21 @@ sys.path.insert(0, str(ROOT))
 OUT = ROOT / "eval" / "results" / "phase1_verify_latest.json"
 
 
+def check_postgres() -> dict:
+    from services.common.db import ensure_schema, get_user_by_username, table_exists
+
+    ensure_schema()
+    documents_ok = table_exists("documents")
+    users_ok = table_exists("users")
+    admin = get_user_by_username("admin")
+    return {
+        "ok": documents_ok and users_ok,
+        "documents_table": documents_ok,
+        "users_table": users_ok,
+        "admin_user_exists": admin is not None,
+    }
+
+
 def main() -> int:
     from scripts.run_pipeline import PHASE1_HTTP_CHECKS, check_redis, wait_http
 
@@ -19,8 +34,14 @@ def main() -> int:
             continue
         checks[name] = wait_http(name, url, timeout=10, interval=1)
     checks["Redis"] = check_redis()
+    checks["PostgreSQL"] = check_postgres()
 
-    core_ok = checks.get("Qdrant") and checks.get("Meilisearch") and checks.get("Redis")
+    core_ok = (
+        checks.get("Qdrant")
+        and checks.get("Meilisearch")
+        and checks.get("Redis")
+        and checks.get("PostgreSQL", {}).get("ok")
+    )
     report = {
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "checks": checks,

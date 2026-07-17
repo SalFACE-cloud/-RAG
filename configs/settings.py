@@ -37,6 +37,7 @@ LLM_MODEL = os.getenv("LLM_MODEL", "deepseek-chat")
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
 JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "24"))
 AUTH_ENABLED = os.getenv("AUTH_ENABLED", "false").lower() == "true"
+DEV_TOKEN_ENABLED = os.getenv("DEV_TOKEN_ENABLED", "false").lower() == "true"
 RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
 AUDIO_SEED_PATH = os.getenv("AUDIO_SEED_PATH", str(BASE_DIR / "data" / "audio_seed.json"))
 

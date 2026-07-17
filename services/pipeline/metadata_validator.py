@@ -27,6 +27,16 @@ class MetadataValidator:
         "audio_exercise", "video", "diagram",
         "policy", "standard", "summary",
     }
+    SUBJECT_BASE_MAP = {
+        "MATH": "MATH", "ENG": "ENG", "PHY": "PHY",
+        "CHEM": "CHE", "CHE": "CHE", "BIO": "BIO",
+        "CHN": "CHN", "HIS": "HIS", "GEO": "GEO", "POL": "POL",
+    }
+    TYPE_ALIASES = {
+        "textbook_example": "jiangyi",
+        "textbook_knowledge": "textbook",
+        "knowledge": "textbook",
+    }
 
     def validate(self, file_path: str) -> ValidationResult:
         content = Path(file_path).read_text(encoding="utf-8")
@@ -44,6 +54,9 @@ class MetadataValidator:
         body = m.group(2)
         if not isinstance(metadata, dict):
             errors.append("YAML 元数据必须是键值对")
+            metadata = {}
+
+        metadata = self._normalize_metadata(metadata, file_path)
 
         for field in self.REQUIRED_FIELDS:
             if field not in metadata:
@@ -58,6 +71,44 @@ class MetadataValidator:
         errors.extend(self._validate_graph_fields(metadata))
 
         return ValidationResult(len(errors) == 0, errors, metadata, body)
+
+    def _normalize_metadata(self, metadata: dict, file_path: str) -> dict:
+        """兼容教材库新 schema（doc_type / subject_code + 路径推断）。"""
+        meta = dict(metadata)
+        if not meta.get("type") and meta.get("doc_type"):
+            meta["type"] = meta["doc_type"]
+        alias = self.TYPE_ALIASES.get(meta.get("type"))
+        if alias:
+            meta["type"] = alias
+        if not meta.get("subject"):
+            inferred = self._infer_subject_code(meta, file_path)
+            if inferred:
+                meta["subject"] = inferred
+        return meta
+
+    def _infer_subject_code(self, metadata: dict, file_path: str) -> str | None:
+        code = str(metadata.get("subject_code") or "")
+        if "{{" in code or not code:
+            code = ""
+        else:
+            code = code.split("-")[0].upper()
+
+        path = file_path.replace("\\", "/")
+        if not code:
+            m = re.search(r"/(MATH|ENG|PHY|CHEM|CHE|BIO|CHN|HIS|GEO|POL)_", path)
+            if m:
+                code = m.group(1)
+
+        base = self.SUBJECT_BASE_MAP.get(code)
+        if not base:
+            return None
+
+        suffix = "S"
+        if "/J_" in path:
+            suffix = "J"
+        elif "/G_" in path:
+            suffix = "S"
+        return f"{base}-{suffix}"
 
     def _validate_graph_fields(self, metadata: dict) -> list[str]:
         errors: list[str] = []

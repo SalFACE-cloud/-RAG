@@ -10,8 +10,13 @@ venv/
 
 # Data
 configs/pipeline_state.json
+vault/.obsidian/
 vault/9_数据流水线/logs/*
 !vault/9_数据流水线/logs/.gitkeep
+vault/9_数据流水线/changed_files.txt
+vault/9_数据流水线/chunk_result.jsonl
+vault/9_数据流水线/chunk_result.report.json
+vault/9_数据流水线/embed_result.report.json
 eval/results/
 eval/sources_manifest.json
 index_output.log

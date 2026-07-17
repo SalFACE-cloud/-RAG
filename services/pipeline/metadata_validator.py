@@ -95,3 +95,61 @@ class MetadataValidator:
                 errors.append(f"type={doc_type} 时需至少提供 exercises 或 knowledge_points")
 
         return errors
+
+
+def _cli_root() -> Path:
+    import sys
+
+    root = Path(__file__).resolve().parents[2]
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    return root
+
+
+def validate_vault(vault_path: Path, ignore_patterns: list[str]) -> tuple[int, int]:
+    from services.pipeline.vault_paths import should_ignore
+
+    invalid = 0
+    valid = 0
+    validator = MetadataValidator()
+    for md in sorted(vault_path.rglob("*.md")):
+        if should_ignore(md, vault_path, ignore_patterns):
+            continue
+        result = validator.validate(str(md))
+        if result.valid:
+            valid += 1
+            print(f"[OK] {md.relative_to(vault_path)}")
+        else:
+            invalid += 1
+            print(f"[FAIL] {md.relative_to(vault_path)}: {result.errors}")
+    return valid, invalid
+
+
+def main_cli() -> int:
+    import argparse
+
+    _cli_root()
+    from services.pipeline.vault_paths import (
+        append_pipeline_log,
+        parse_ignore_patterns,
+        write_pipeline_result,
+    )
+
+    parser = argparse.ArgumentParser(description="校验 vault Markdown 元数据")
+    parser.add_argument("--vault-path", default="./vault")
+    parser.add_argument("--ignore-path", default="0_项目文档/**")
+    args = parser.parse_args()
+
+    vault = Path(args.vault_path).resolve()
+    ignore = parse_ignore_patterns(args.ignore_path)
+    append_pipeline_log(f"metadata_validator start vault={vault}")
+    valid, invalid = validate_vault(vault, ignore)
+    print(f"\nvalid={valid} invalid={invalid}")
+    ok = invalid == 0
+    write_pipeline_result("metadata_validator", ok, {"valid": valid, "invalid": invalid})
+    append_pipeline_log(f"metadata_validator done valid={valid} invalid={invalid}")
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main_cli())

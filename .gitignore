@@ -10,6 +10,8 @@ venv/
 
 # Data
 configs/pipeline_state.json
+vault/9_数据流水线/logs/*
+!vault/9_数据流水线/logs/.gitkeep
 eval/results/
 eval/sources_manifest.json
 index_output.log

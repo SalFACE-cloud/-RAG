@@ -28,18 +28,36 @@
 ## 命令
 
 ```powershell
-docker compose up -d redis
+# 一键串联 Phase 1 + Phase 2
+python main.py pipeline
+python scripts/run_pipeline.py
+
+# 分步
+docker compose up -d qdrant meilisearch redis neo4j
+python scripts/verify_phase1.py
 python scripts/validate_vault.py
-python main.py enqueue          # 入队
-python main.py worker           # 消费（另开终端）
+python scripts/run_pipeline.py --phase2-only --force --skip-docker
+
+# RQ 队列模式
+python main.py enqueue
+python main.py worker
 python scripts/verify_phase2.py
 ```
 
 ## CI
 
-Push 到 GitHub `main` 分支后自动触发：
+Push 到 GitHub `main` 后自动运行 **Phase 1 → Phase 2** 串联流水线：
 
-1. `validate` — 元数据校验（无需 embedding）
-2. `pipeline` — Docker 启动 Qdrant/Meili/Redis/Neo4j → 全量索引 → 图谱 → 检索评估
+1. **Phase 1**：Docker 启动 Qdrant/Meili/Redis/Neo4j → `verify_phase1.py`
+2. **Phase 2**：元数据校验 →（有 vault 变更或手动触发时）`run_pipeline.py --ci`
 
-报告：`eval/results/phase2_verify_latest.json`
+手动全量跑：`Actions → Knowledge Pipeline → Run workflow`
+
+本地等价命令：
+
+```powershell
+python main.py pipeline
+python scripts/run_pipeline.py --phase2-only --force --skip-docker
+```
+
+报告：`eval/results/pipeline_latest.json`、`eval/results/phase2_verify_latest.json`

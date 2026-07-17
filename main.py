@@ -18,6 +18,7 @@ def print_help():
   python main.py eval --retrieval-only  # 仅检索指标，不调用 LLM
   python main.py eval --split test      # 只跑 test 集
   python main.py graph          # 重建 Neo4j 知识图谱（需 GRAPH_ENABLED=true）
+  python main.py pipeline       # Phase1 基础设施 + Phase2 流水线（一键）
   python main.py worker         # 启动 RQ Worker（Phase 2 任务队列）
   python main.py enqueue        # 将待处理文件入队
   python main.py api            # 启动 FastAPI 服务
@@ -58,6 +59,9 @@ def main():
     elif cmd == "graph":
         from scripts.rebuild_graph import main as graph_main
         raise SystemExit(graph_main())
+    elif cmd == "pipeline":
+        from scripts.run_pipeline import main as pipeline_main
+        raise SystemExit(pipeline_main(sys.argv[2:]))
     elif cmd == "worker":
         from services.pipeline.main import run_worker
         run_worker(burst="--burst" in sys.argv)

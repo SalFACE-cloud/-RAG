@@ -22,13 +22,13 @@ RERANKER_MODEL = os.getenv("RERANKER_MODEL", "BAAI/bge-reranker-v2-m3")
 USE_FP16 = os.getenv("USE_FP16", "true").lower() == "true"
 USE_RERANK = os.getenv("USE_RERANK", "false").lower() == "true"
 
-COLLECTION_NAME = "edu_knowledge"
-MEILI_INDEX = "edu_knowledge"
+COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME", "edu_knowledge")
+MEILI_INDEX = os.getenv("MEILI_INDEX", COLLECTION_NAME)
 VECTOR_SIZE = 1024
 
-CHUNK_MIN_CHARS = 200
-CHUNK_MAX_CHARS = 800
-CHUNK_OVERLAP_CHARS = 80
+CHUNK_MIN_CHARS = int(os.getenv("CHUNK_MIN_CHARS", "200"))
+CHUNK_MAX_CHARS = int(os.getenv("CHUNK_SIZE", os.getenv("CHUNK_MAX_CHARS", "800")))
+CHUNK_OVERLAP_CHARS = int(os.getenv("CHUNK_OVERLAP", os.getenv("CHUNK_OVERLAP_CHARS", "80")))
 
 LLM_API_BASE = os.getenv("LLM_API_BASE", "")
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")

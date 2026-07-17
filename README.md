@@ -41,7 +41,21 @@ copy .env.example .env
 # 知识图谱: GRAPH_ENABLED=true + NEO4J_URI/NEO4J_PASSWORD
 ```
 
-### 4. 索引文档
+### 4. 一键流水线（Phase 1 + Phase 2）
+
+```powershell
+python main.py pipeline              # Docker 启动 → 全量索引 → 图谱 → 验收
+python scripts/run_pipeline.py       # 同上，支持更多参数
+python scripts/init_all.py           # 兼容旧命令，等价于 pipeline --force
+```
+
+仅跑 Phase 2（服务已启动时）：
+
+```powershell
+python scripts/run_pipeline.py --phase2-only --force --skip-docker
+```
+
+### 5. 索引文档（手动）
 
 ```powershell
 python main.py index --force
@@ -49,7 +63,7 @@ python main.py index --force
 
 支持 `vault/` 下的 `.md`、`.docx`、`.pdf`（后两者需安装 [Pandoc](https://pandoc.org/installing.html)）。非 Markdown 文件转换后写入 `vault/_converted/`。
 
-### 5. 启动 API
+### 6. 启动 API
 
 ```powershell
 python main.py api
@@ -61,6 +75,10 @@ python main.py api
 
 | 命令 | 说明 |
 |------|------|
+| `python main.py pipeline` | **Phase1+2 一键**：Docker → 索引 → 图谱 → 验收 |
+| `python scripts/run_pipeline.py` | 同上（`--phase1-only` / `--phase2-only` / `--ci`） |
+| `python scripts/init_all.py` | 兼容旧命令，等价于 pipeline --force |
+| `python scripts/verify_phase1.py` | Phase 1 基础设施验收 |
 | `python scripts/verify_phase2.py` | Phase 2 流水线验收（元数据 + RQ） |
 | `python main.py worker` | 启动 RQ Worker 消费任务队列 |
 | `python main.py enqueue` | 将待处理 vault 文件入队 |

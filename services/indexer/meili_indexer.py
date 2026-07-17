@@ -1,4 +1,10 @@
 import logging
+import sys
+from pathlib import Path
+
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
 import requests
 
@@ -144,3 +150,57 @@ class MeiliIndexer:
             }
             for h in hits
         ]
+
+
+def _cli_root() -> Path:
+    import sys
+
+    root = Path(__file__).resolve().parents[2]
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    return root
+
+
+def run_sync_meili_from_manifest() -> dict:
+    import json
+
+    from services.indexer.chunker import chunk_from_dict
+    from services.pipeline.vault_paths import CHUNKS_MANIFEST_JSON, append_pipeline_log
+
+    _cli_root()
+    if not CHUNKS_MANIFEST_JSON.exists():
+        raise FileNotFoundError(f"缺少分块清单: {CHUNKS_MANIFEST_JSON}")
+
+    manifest = json.loads(CHUNKS_MANIFEST_JSON.read_text(encoding="utf-8"))
+    chunks = [chunk_from_dict(c) for c in manifest.get("chunks", [])]
+    meili = MeiliIndexer()
+    meili.init_index()
+
+    source_files = sorted({c.source_file for c in chunks})
+    for sf in source_files:
+        meili.delete_by_source_file(sf)
+
+    count = meili.upsert_chunks(chunks) if chunks else 0
+    append_pipeline_log(f"meili_indexer upserted={count} sources={len(source_files)}")
+    print(f"[MEILI] upserted={count} from {len(source_files)} files")
+    return {"upserted": count, "source_files": len(source_files)}
+
+
+def main_cli() -> int:
+    _cli_root()
+    from services.pipeline.vault_paths import write_pipeline_result
+
+    try:
+        result = run_sync_meili_from_manifest()
+    except FileNotFoundError as exc:
+        print(exc)
+        write_pipeline_result("meili_indexer", False, {"error": str(exc)})
+        return 1
+
+    ok = result["upserted"] > 0
+    write_pipeline_result("meili_indexer", ok, result)
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main_cli())

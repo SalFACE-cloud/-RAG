@@ -45,11 +45,11 @@ class QdrantIndexer:
             ),
         )
 
-    def upsert_chunks(self, chunks: list) -> int:
+    def upsert_chunks(self, chunks: list, mock: bool = False) -> int:
         if not chunks:
             return 0
         texts = [c.content for c in chunks]
-        vectors = embed_texts(texts)
+        vectors = embed_texts(texts, mock=mock)
         points = [
             PointStruct(
                 id=c.chunk_id,

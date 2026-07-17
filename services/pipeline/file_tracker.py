@@ -63,3 +63,123 @@ class FileTracker:
             f for f in self.get_pending_files(directory)
             if Path(f).suffix.lower() == ".md"
         ]
+
+
+def _cli_root() -> Path:
+    import sys
+
+    root = Path(__file__).resolve().parents[2]
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    return root
+
+
+def get_git_diff_files(vault_root: Path) -> list[str]:
+    import subprocess
+
+    vault_root = vault_root.resolve()
+    candidates: list[str] = []
+    for ref_pair in (["HEAD^", "HEAD"], ["HEAD~1", "HEAD"]):
+        try:
+            out = subprocess.check_output(
+                ["git", "diff", "--name-only", ref_pair[0], ref_pair[1], "--", "vault/"],
+                text=True,
+                stderr=subprocess.DEVNULL,
+            )
+            candidates = [line.strip() for line in out.splitlines() if line.strip()]
+            if candidates:
+                break
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            continue
+
+    if not candidates:
+        try:
+            out = subprocess.check_output(
+                ["git", "ls-files", "vault/"],
+                text=True,
+                stderr=subprocess.DEVNULL,
+            )
+            candidates = [line.strip() for line in out.splitlines() if line.strip()]
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
+
+    resolved = []
+    for rel in candidates:
+        p = Path(rel)
+        if not p.is_absolute():
+            p = vault_root.parent / p if rel.startswith("vault") else vault_root / rel
+        if p.exists() and p.is_file():
+            resolved.append(str(p.resolve()))
+    return resolved
+
+
+def run_git_diff_scan(vault_path: Path, ignore_patterns: list[str]) -> list[str]:
+    from services.pipeline.converters import FormatConverter
+    from services.pipeline.vault_paths import append_pipeline_log, save_changed_files, should_ignore
+
+    vault_path = vault_path.resolve()
+    tracker = FileTracker()
+    converter = FormatConverter()
+    raw = get_git_diff_files(vault_path)
+    append_pipeline_log(f"file_tracker git_diff raw_count={len(raw)}")
+
+    changed: list[str] = []
+    for fp in raw:
+        path = Path(fp)
+        if should_ignore(path, vault_path, ignore_patterns):
+            continue
+        ext = path.suffix.lower()
+        if ext in {".docx", ".doc", ".pdf"}:
+            conv = converter.convert(str(path))
+            if conv.get("success"):
+                changed.append(conv["output_path"])
+                tracker.mark_processed(str(path), "converted")
+                print(f"[CONVERT] {path.name} -> {conv['output_path']}")
+            else:
+                tracker.mark_processed(str(path), "convert_failed")
+                print(f"[CONVERT FAIL] {path}: {conv.get('error')}")
+        elif ext == ".md":
+            changed.append(str(path.resolve()))
+        else:
+            changed.append(str(path.resolve()))
+
+    if not changed:
+        changed = tracker.get_pending_md_files(str(vault_path))
+        append_pipeline_log(f"file_tracker fallback pending_count={len(changed)}")
+
+    save_changed_files(changed, "git_diff")
+    append_pipeline_log(f"file_tracker done changed_count={len(changed)}")
+    for f in changed:
+        print(f"[CHANGED] {f}")
+    return changed
+
+
+def main_cli() -> int:
+    import argparse
+
+    _cli_root()
+    from services.pipeline.vault_paths import parse_ignore_patterns, write_pipeline_result
+
+    parser = argparse.ArgumentParser(description="文件变更跟踪与格式转换")
+    parser.add_argument("--scan-mode", choices=["git_diff", "pending"], default="git_diff")
+    parser.add_argument("--vault-path", default="./vault")
+    parser.add_argument("--ignore-path", default="0_项目文档/**")
+    args = parser.parse_args()
+
+    vault = Path(args.vault_path).resolve()
+    ignore = parse_ignore_patterns(args.ignore_path)
+    if args.scan_mode == "git_diff":
+        files = run_git_diff_scan(vault, ignore)
+    else:
+        tracker = FileTracker()
+        files = tracker.get_pending_md_files(str(vault))
+        from services.pipeline.vault_paths import save_changed_files
+
+        save_changed_files(files, "pending")
+
+    write_pipeline_result("file_tracker", True, {"changed_count": len(files)})
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main_cli())

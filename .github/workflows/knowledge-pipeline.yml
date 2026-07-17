@@ -1,109 +1,118 @@
-name: Knowledge Pipeline
+# 青澜教育知识库 RAG 自动化流水线（方案 B：分步 CLI）
+name: Edu Knowledge RAG Pipeline
 
 on:
   push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
+    branches: [main, master, dev]
+    paths:
+      - "vault/1_政策与课标/**"
+      - "vault/2_教材库/**"
+      - "vault/3_教辅资料/**"
+      - "vault/4_题库与试卷/**"
+      - "vault/6_知识图谱/**"
+      - "vault/8_外购数据管理/**"
+      - "vault/9_数据流水线/**"
+      - ".github/workflows/knowledge-pipeline.yml"
+      - "services/pipeline/**"
+      - "services/indexer/**"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  validate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: pip install -r services/pipeline/requirements.txt pyyaml
-
-      - name: Validate vault metadata
-        run: python scripts/validate_vault.py
-
-  detect-changes:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    outputs:
-      has_vault_changes: ${{ steps.changed.outputs.has_vault }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - id: changed
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "has_vault=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          if git rev-parse HEAD^ >/dev/null 2>&1; then
-            COUNT=$(git diff --name-only HEAD^ HEAD -- 'vault/' | wc -l)
-          else
-            COUNT=1
-          fi
-          if [ "$COUNT" -gt 0 ]; then
-            echo "has_vault=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_vault=false" >> $GITHUB_OUTPUT
-          fi
-
-  pipeline:
-    needs: [validate, detect-changes]
-    if: needs.detect-changes.outputs.has_vault_changes == 'true'
+  knowledge-process:
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v4
+    env:
+      QDRANT_URL: http://127.0.0.1:6333
+      MEILI_URL: http://127.0.0.1:7700
+      MEILI_MASTER_KEY: edu_meili_dev_2026
+      REDIS_HOST: localhost
+      EMBEDDING_MODEL: BAAI/bge-m3
+      VAULT_ROOT_PATH: ./vault
+      CHUNK_SIZE: "512"
+      CHUNK_OVERLAP: "64"
+      IGNORE_VAULT_PATHS: "0_项目文档/**"
+      USE_FP16: "false"
+      HF_HUB_DISABLE_TELEMETRY: "1"
 
-      - name: Setup Python
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Start infrastructure
-        run: docker compose up -d qdrant meilisearch redis neo4j
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt', 'services/pipeline/requirements.txt', 'services/indexer/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
-      - name: Wait for services
+      - name: Install pipeline dependencies
+        run: pip install -r requirements.txt
+
+      - name: Start docker middleware
         run: |
+          docker compose up -d qdrant postgres redis meilisearch
           for i in $(seq 1 45); do
             curl -sf http://localhost:6333/healthz && curl -sf http://localhost:7700/health && exit 0
             sleep 2
           done
-          echo "Services not ready" && exit 1
+          echo "middleware not ready" && exit 1
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Run index pipeline
-        env:
-          QDRANT_URL: http://127.0.0.1:6333
-          MEILI_URL: http://127.0.0.1:7700
-          MEILI_MASTER_KEY: edu_meili_dev_2026
-          NEO4J_URI: bolt://127.0.0.1:7687
-          NEO4J_PASSWORD: edu_neo4j_2026
-          GRAPH_ENABLED: "true"
-          REDIS_HOST: localhost
-          USE_FP16: "false"
-          HF_HUB_DISABLE_TELEMETRY: "1"
+      - name: Validate vault document metadata
         run: |
-          python scripts/rebuild_index.py
-          python main.py graph
+          python services/pipeline/metadata_validator.py \
+            --vault-path "${{ env.VAULT_ROOT_PATH }}" \
+            --ignore-path "${{ env.IGNORE_VAULT_PATHS }}"
 
-      - name: Retrieval eval (no LLM)
-        env:
-          QDRANT_URL: http://127.0.0.1:6333
-          MEILI_URL: http://127.0.0.1:7700
-          MEILI_MASTER_KEY: edu_meili_dev_2026
-          USE_FP16: "false"
-        run: python scripts/eval_rag.py --retrieval-only
+      - name: Convert file format & incremental track
+        run: |
+          python services/pipeline/file_tracker.py \
+            --scan-mode git_diff \
+            --vault-path "${{ env.VAULT_ROOT_PATH }}" \
+            --ignore-path "${{ env.IGNORE_VAULT_PATHS }}"
 
-      - name: Phase 2 verify
+      - name: Chunk & Embedding & Update Vector DB
         env:
-          REDIS_HOST: localhost
-        run: python scripts/verify_phase2.py
+          HF_ENDPOINT: https://hf-mirror.com
+          HF_HUB_DOWNLOAD_TIMEOUT: "600"
+        run: |
+          python services/indexer/chunker.py \
+            --vault-path "${{ env.VAULT_ROOT_PATH }}" \
+            --ignore-paths "${{ env.IGNORE_VAULT_PATHS }}" \
+            --chunk-size "${{ env.CHUNK_SIZE }}" \
+            --chunk-overlap "${{ env.CHUNK_OVERLAP }}"
+          python services/indexer/embedder.py \
+            --vault-path "${{ env.VAULT_ROOT_PATH }}" \
+            --mock-embeddings
+
+      - name: Sync meilisearch full-text index
+        run: python services/indexer/meili_indexer.py
+
+      - name: Upload pipeline log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-run-log
+          path: |
+            vault/9_数据流水线/logs/
+            eval/results/pipeline_b_verify_latest.json
+
+      - name: Verify pipeline artifacts
+        run: |
+          test -f vault/9_数据流水线/logs/chunks_manifest.json
+          test -f vault/9_数据流水线/logs/pipeline_result.json
+          python -c "import json; m=json.load(open('vault/9_数据流水线/logs/chunks_manifest.json',encoding='utf-8')); assert len(m.get('chunks',[]))>0, 'no chunks'; print('chunks=', len(m['chunks']))"

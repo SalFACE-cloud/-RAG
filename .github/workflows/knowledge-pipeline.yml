@@ -3,18 +3,12 @@ name: Knowledge Pipeline
 on:
   push:
     branches: [main, master]
-    paths:
-      - "vault/**"
-      - "services/pipeline/**"
-      - "services/indexer/**"
-      - "scripts/validate_vault.py"
-      - "scripts/rebuild_index.py"
-      - "requirements.txt"
   pull_request:
-    paths:
-      - "vault/**"
-      - "services/pipeline/**"
+    branches: [main, master]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   validate:
@@ -37,7 +31,6 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     outputs:
-      changed_files: ${{ steps.changed.outputs.all }}
       has_vault_changes: ${{ steps.changed.outputs.has_vault }}
     steps:
       - uses: actions/checkout@v4
@@ -46,17 +39,15 @@ jobs:
       - id: changed
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo 'all=["vault/"]' >> $GITHUB_OUTPUT
             echo "has_vault=true" >> $GITHUB_OUTPUT
             exit 0
           fi
           if git rev-parse HEAD^ >/dev/null 2>&1; then
-            FILES=$(git diff --name-only HEAD^ HEAD -- 'vault/' | jq -R . | jq -s .)
+            COUNT=$(git diff --name-only HEAD^ HEAD -- 'vault/' | wc -l)
           else
-            FILES='["vault/"]'
+            COUNT=1
           fi
-          echo "all=$FILES" >> $GITHUB_OUTPUT
-          if [ "$FILES" != "[]" ]; then
+          if [ "$COUNT" -gt 0 ]; then
             echo "has_vault=true" >> $GITHUB_OUTPUT
           else
             echo "has_vault=false" >> $GITHUB_OUTPUT
@@ -66,6 +57,7 @@ jobs:
     needs: [validate, detect-changes]
     if: needs.detect-changes.outputs.has_vault_changes == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -79,10 +71,11 @@ jobs:
 
       - name: Wait for services
         run: |
-          for i in $(seq 1 30); do
-            curl -sf http://localhost:6333/healthz && curl -sf http://localhost:7700/health && break
+          for i in $(seq 1 45); do
+            curl -sf http://localhost:6333/healthz && curl -sf http://localhost:7700/health && exit 0
             sleep 2
           done
+          echo "Services not ready" && exit 1
 
       - name: Install dependencies
         run: pip install -r requirements.txt
@@ -97,6 +90,7 @@ jobs:
           GRAPH_ENABLED: "true"
           REDIS_HOST: localhost
           USE_FP16: "false"
+          HF_HUB_DISABLE_TELEMETRY: "1"
         run: |
           python scripts/rebuild_index.py
           python main.py graph

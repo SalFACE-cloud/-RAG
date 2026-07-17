@@ -3,7 +3,17 @@
 日期：2026-07-17  
 范围：素材处理流水线（格式转换 → 元数据校验 → 索引入库 + RQ 队列）
 
-**结论：✅ PASS**（本地 `scripts/verify_phase2.py`）
+**结论：✅ PASS**（本地 `scripts/verify_phase2.py` + 全量索引/图谱/检索评估）
+
+## 本地流水线结果（2026-07-17）
+
+| 步骤 | 结果 |
+|------|------|
+| `validate_vault.py` | 8 valid / 0 invalid |
+| `rebuild_index.py` | 8 文件 indexed |
+| `main.py graph` | 8 imported, 14 Knowledge / 2 Exercise |
+| `eval_rag.py --retrieval-only` | recall@5=87.5%, MRR=0.748 |
+| Redis RQ 队列 | 连接正常 |
 
 ## 验收结果
 

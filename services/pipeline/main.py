@@ -122,9 +122,15 @@ def enqueue_changed_files(vault_dir: str | None = None, changed_files: list[str]
 
 
 def run_worker(burst: bool = False) -> None:
-    from rq import Worker
+    conn = _get_redis()
+    if sys.platform == "win32":
+        from rq.worker import SimpleWorker
 
-    worker = Worker(["pipeline"], connection=_get_redis())
+        worker = SimpleWorker(["pipeline"], connection=conn)
+    else:
+        from rq import Worker
+
+        worker = Worker(["pipeline"], connection=conn)
     worker.work(burst=burst)
 
 

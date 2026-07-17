@@ -67,7 +67,7 @@ curl "http://localhost:8000/api/v1/exercises/filter?knowledge_id=MATH-KP-03-01&d
 | `services/pipeline/metadata_validator.py` | 图谱 YAML 字段校验 |
 | `scripts/rebuild_graph.py` | 独立图谱重建 |
 | `scripts/verify_graph.py` | 自动化验收 |
-| `vault/4_题库/.../等比数列练习.md` | Exercise 样例 |
+| `vault/4_题库与试卷/.../等比数列练习.md` | Exercise 样例 |
 | `vault/.../等比数列.md` 等 | competencies / prerequisites / Obsidian 链接 |
 
 ## YAML 扩展字段示例

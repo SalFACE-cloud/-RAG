@@ -61,7 +61,9 @@ python main.py api
 
 | 命令 | 说明 |
 |------|------|
-| `python scripts/init_all.py` | 一键：Docker → 全量索引 → 图谱 |
+| `python scripts/verify_phase2.py` | Phase 2 流水线验收（元数据 + RQ） |
+| `python main.py worker` | 启动 RQ Worker 消费任务队列 |
+| `python main.py enqueue` | 将待处理 vault 文件入队 |
 | `python scripts/rebuild_index.py` | 全量重建索引（同 `index --force`） |
 | `python scripts/eval_rag.py` | RAG 评估（同 `main.py eval`） |
 | `python main.py index` | 增量索引 vault 中变更文件 |
@@ -227,6 +229,7 @@ curl -X POST http://localhost:8000/api/v1/assessment/submit -H "Content-Type: ap
 - Redis 不可用时限流自动降级，不影响正常请求
 - Pandoc 未安装时 DOCX/PDF 转换会返回明确错误
 - Meilisearch 索引需 `primaryKey=chunk_id`；若全文检索无结果，请 `python main.py index --force` 重建
+- Phase 2 流水线验收见 [docs/phase2_signoff.md](docs/phase2_signoff.md)；GitHub 推送见 [docs/github_setup.md](docs/github_setup.md)
 - Phase 3 验收详情见 [docs/phase3_signoff.md](docs/phase3_signoff.md)
 - Phase 4 知识图谱：`GRAPH_ENABLED=true` 后运行 `python main.py graph`；验收见 [docs/phase4_signoff.md](docs/phase4_signoff.md)
 - Phase 5 API：RAG 使用 WebSocket `/api/v1/rag/ws`；验收见 [docs/phase5_signoff.md](docs/phase5_signoff.md)

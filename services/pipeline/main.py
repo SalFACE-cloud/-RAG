@@ -80,16 +80,6 @@ def process_file(file_path: str, indexer: IndexerService | None = None) -> dict:
     return {"success": False, "stage": "index", "error": result.get("error"), "source_file": str(path)}
 
 
-def convert_and_index(
-    file_path: str,
-    converter: FormatConverter,
-    indexer: IndexerService,
-    tracker: FileTracker,
-) -> dict:
-    del converter, tracker
-    return process_file(file_path, indexer=indexer)
-
-
 def enqueue_file(file_path: str) -> str:
     from rq import Retry
 

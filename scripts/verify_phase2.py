@@ -12,23 +12,10 @@ OUT = ROOT / "eval" / "results" / "phase2_verify_latest.json"
 
 
 def validate_vault(vault_dir: Path) -> dict:
-    from services.pipeline.metadata_validator import MetadataValidator
+    from services.pipeline.metadata_validator import validate_vault as _validate_vault
+    from services.pipeline.vault_paths import parse_ignore_patterns
 
-    validator = MetadataValidator()
-    ok = err = 0
-    errors = []
-    for md in sorted(vault_dir.rglob("*.md")):
-        if "_converted" in md.parts or md.name.startswith("."):
-            continue
-        if "0_项目文档" in md.parts:
-            continue
-        result = validator.validate(str(md))
-        if result.valid:
-            ok += 1
-        else:
-            err += 1
-            errors.append({"file": str(md.relative_to(ROOT)), "errors": result.errors})
-    return {"valid": ok, "invalid": err, "errors": errors, "pass": err == 0 and ok > 0}
+    return _validate_vault(vault_dir.resolve(), parse_ignore_patterns("0_项目文档/**"))
 
 
 def check_rq() -> dict:

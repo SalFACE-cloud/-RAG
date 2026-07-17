@@ -154,6 +154,18 @@ def run_git_diff_scan(vault_path: Path, ignore_patterns: list[str]) -> list[str]
     return changed
 
 
+def run_full_scan(vault_path: Path, ignore_patterns: list[str]) -> list[str]:
+    from services.pipeline.vault_paths import append_pipeline_log, iter_vault_files, save_changed_files
+
+    vault_path = vault_path.resolve()
+    files = [str(p.resolve()) for p in iter_vault_files(vault_path, ignore_patterns, {".md"})]
+    save_changed_files(files, "full")
+    append_pipeline_log(f"file_tracker full scan count={len(files)}")
+    for f in files:
+        print(f"[FULL] {f}")
+    return files
+
+
 def main_cli() -> int:
     import argparse
 
@@ -161,7 +173,7 @@ def main_cli() -> int:
     from services.pipeline.vault_paths import parse_ignore_patterns, write_pipeline_result
 
     parser = argparse.ArgumentParser(description="文件变更跟踪与格式转换")
-    parser.add_argument("--scan-mode", choices=["git_diff", "pending"], default="git_diff")
+    parser.add_argument("--scan-mode", choices=["git_diff", "pending", "full"], default="git_diff")
     parser.add_argument("--vault-path", default="./vault")
     parser.add_argument("--ignore-path", default="0_项目文档/**")
     args = parser.parse_args()
@@ -170,6 +182,8 @@ def main_cli() -> int:
     ignore = parse_ignore_patterns(args.ignore_path)
     if args.scan_mode == "git_diff":
         files = run_git_diff_scan(vault, ignore)
+    elif args.scan_mode == "full":
+        files = run_full_scan(vault, ignore)
     else:
         tracker = FileTracker()
         files = tracker.get_pending_md_files(str(vault))

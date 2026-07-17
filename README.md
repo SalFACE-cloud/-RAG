@@ -71,6 +71,40 @@ python main.py api
 
 访问 Swagger: http://localhost:8000/docs
 
+## 双流水线说明
+
+项目保留两套流水线，用途不同：
+
+| | **Pipeline A（本地一体化）** | **Pipeline B（CI / 分步 CLI）** |
+|---|---|---|
+| 入口 | `main.py pipeline` / `run_pipeline.py` | `metadata_validator` → `file_tracker` → `chunker` → `embedder` → `meili` |
+| 向量 | 真实 BGE-M3 | CI 用 `--mock-embeddings` |
+| 图谱 / eval | 可选（`run_pipeline` 默认跑） | CI 不跑 |
+| 验收 | `verify_phase1.py` + `verify_phase2.py` | `verify_pipeline_b.py` |
+
+**本地全量（真实向量 + 图谱）：**
+
+```powershell
+python main.py pipeline
+# 或
+python scripts/run_pipeline.py --phase2-only --force --skip-docker
+python main.py graph
+python main.py eval --retrieval-only
+```
+
+**Pipeline B 分步（与 GitHub Actions 一致）：**
+
+```powershell
+python services/pipeline/metadata_validator.py --vault-path ./vault --ignore-path "0_项目文档/**"
+python services/pipeline/file_tracker.py --scan-mode full --vault-path ./vault
+python services/indexer/chunker.py --vault-path ./vault --chunk-size 512 --chunk-overlap 64
+python services/indexer/embedder.py --vault-path ./vault          # 本地不加 --mock-embeddings
+python services/indexer/meili_indexer.py
+python scripts/verify_pipeline_b.py                               # 一键验收（mock 向量）
+```
+
+替换整个 vault 后请用 `file_tracker --scan-mode full`，再跑 chunker/embedder/meili。
+
 ## 常用命令
 
 | 命令 | 说明 |
@@ -79,7 +113,8 @@ python main.py api
 | `python scripts/run_pipeline.py` | 同上（`--phase1-only` / `--phase2-only` / `--ci`） |
 | `python scripts/init_all.py` | 兼容旧命令，等价于 pipeline --force |
 | `python scripts/verify_phase1.py` | Phase 1 基础设施验收 |
-| `python scripts/verify_phase2.py` | Phase 2 流水线验收（元数据 + RQ） |
+| `python scripts/verify_phase2.py` | Phase 2 流水线验收（元数据 + RQ，Pipeline A） |
+| `python scripts/verify_pipeline_b.py` | Pipeline B 分步 CLI 全链路验收 |
 | `python main.py worker` | 启动 RQ Worker 消费任务队列 |
 | `python main.py enqueue` | 将待处理 vault 文件入队 |
 | `python scripts/rebuild_index.py` | 全量重建索引（同 `index --force`） |
@@ -210,12 +245,13 @@ curl -X POST http://localhost:8000/api/v1/assessment/submit -H "Content-Type: ap
 │   ├── api/                        # FastAPI + ws/ + requirements.txt
 │   └── rag/                        # RAG 答案生成
 ├── vault/                          # Obsidian Vault（0–9 目录骨架）
-│   ├── 3_教辅资料/                 # 当前样例文档
-│   ├── 4_题库/                     # 已索引历史目录（勿重命名）
-│   ├── 4_题库与试卷/               # 指南标准命名（新题放此）
+│   ├── 2_教材库/                   # 教材 Markdown（含集合 CH01 样例）
+│   ├── 3_教辅资料/                 # 讲义样例
+│   ├── 4_题库与试卷/               # 结构化题库（标准目录）
+│   ├── 9_数据流水线/logs/          # Pipeline B 运行日志（gitignore）
 │   └── _converted/                 # 格式转换输出
-├── eval/                           # 黄金评估集 + run_eval.py
-├── scripts/                        # init_all / rebuild_index / eval_rag + 验收脚本
+├── eval/                           # golden_set_v2.jsonl + run_eval.py
+├── scripts/                        # run_pipeline / verify_* / rebuild_index 等
 ├── data/                           # audio_seed.json 等占位数据
 └── docs/
     ├── dev_guide.md                # 完整开发实施指南
@@ -233,7 +269,7 @@ curl -X POST http://localhost:8000/api/v1/assessment/submit -H "Content-Type: ap
 | `JWT_EXPIRE_HOURS` | `24` | JWT 有效期（小时） |
 | `AUDIO_SEED_PATH` | `data/audio_seed.json` | 音频元数据占位文件 |
 | `RATE_LIMIT_PER_MINUTE` | `60` | 每 IP 每分钟请求上限 |
-| `GRAPH_ENABLED` | `true` | 是否写入 Neo4j 知识图谱 |
+| `GRAPH_ENABLED` | 见 `.env.example`（`true`） | 是否写入 Neo4j；`settings.py` 无 `.env` 时默认 `false` |
 | `NEO4J_URI` | `bolt://127.0.0.1:7687` | Neo4j 连接 |
 | `NEO4J_PASSWORD` | `edu_neo4j_2026` | Neo4j 密码 |
 | `POSTGRES_*` | 见 `.env.example` | PostgreSQL（Phase 6+ 持久化） |
@@ -241,9 +277,10 @@ curl -X POST http://localhost:8000/api/v1/assessment/submit -H "Content-Type: ap
 
 ## 注意事项
 
-- 首次运行会下载 BGE-M3 模型，体积较大
+- 环境变量以 `.env` 为准（复制自 `.env.example`）
+- 首次 Pipeline A 会下载 BGE-M3，体积较大；Pipeline B 验收可用 `--mock-embeddings` 跳过
 - 无 GPU 时推理较慢，建议先验证索引流程
-- 评估前需运行 `manifest` 并将 `eval/golden_set_v1.jsonl` 中的 `TODO_CHUNK` 替换为真实 chunk_id
+- 黄金评估集默认 `eval/golden_set_v2.jsonl`（56 条）；新增教材内容后需扩展评估集
 - Redis 不可用时限流自动降级，不影响正常请求
 - Pandoc 未安装时 DOCX/PDF 转换会返回明确错误
 - Meilisearch 索引需 `primaryKey=chunk_id`；若全文检索无结果，请 `python main.py index --force` 重建

@@ -4,6 +4,12 @@
 > **日期**：2026-07-14
 > **适用项目**：初高中全科教育产品知识库 + RAG 系统
 
+> **实现状态说明（2026-07-17）**：本文为规划与参考指南，**以仓库实际代码为准**。当前已实现：
+> - **Pipeline A**：`scripts/run_pipeline.py` + `IndexerService`（本地真实向量、图谱、eval）
+> - **Pipeline B**：分步 CLI（GitHub Actions 使用 mock 向量）
+> - **API**：WebSocket `WS /api/v1/rag/ws`（SSE `/rag/ask` 已移除）
+> - CI 见 [`.github/workflows/knowledge-pipeline.yml`](../.github/workflows/knowledge-pipeline.yml)
+
 ---
 
 ## 目录
@@ -335,6 +341,8 @@ jobs:
           NEO4J_URI: ${{ secrets.NEO4J_URI }}
         run: python services/pipeline/main.py
 ```
+
+> **实际 CI** 已改为 Pipeline B 分步 CLI，见 [`.github/workflows/knowledge-pipeline.yml`](../.github/workflows/knowledge-pipeline.yml)。上文 YAML 仅供历史参考。
 
 #### 1.3 Phase 1 验收标准
 
@@ -2034,29 +2042,12 @@ edu-knowledge-base/
 │   │   ├── hybrid_retriever.py     # 混合检索
 │   │   ├── evaluator.py            # RAG 评估
 │   │   └── requirements.txt
-│   └── api/                        # API 服务
-│       ├── app.py                  # FastAPI 主应用
-│       ├── auth.py                 # 鉴权中间件
-│       ├── routes/                 # 路由模块
-│       └── requirements.txt
-├── vault/                          # Obsidian Vault (教研工作区)
-│   ├── .obsidian/
-│   ├── 0_项目文档/
-│   ├── 1_政策与课标/
-│   ├── 2_教材库/
-│   ├── 3_教辅资料/
-│   ├── 4_题库与试卷/
-│   ├── 5_多媒体资源/
-│   ├── 6_知识图谱/
-│   ├── 7_元数据与索引/
-│   ├── 8_外购数据管理/
-│   └── 9_数据流水线/
-├── scripts/                        # 运维脚本
-│   ├── init_all.py                 # 初始化所有服务
-│   ├── rebuild_index.py            # 重建索引
-│   └── eval_rag.py                 # RAG 评估
-└── docs/                           # 项目文档
-    └── dev_guide.md                # 本文档
+│   └── api/                        # API + ws/rag_ws.py
+│   └── rag/answer_generator.py
+├── vault/ … 9_数据流水线/logs/
+├── scripts/                        # run_pipeline / verify_* / rebuild_index
+├── eval/golden_set_v2.jsonl
+└── docs/phase*_signoff.md
 ```
 
 ---

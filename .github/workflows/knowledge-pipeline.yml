@@ -107,12 +107,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pipeline-run-log
-          path: |
-            vault/9_数据流水线/logs/
-            eval/results/pipeline_b_verify_latest.json
+          path: vault/9_数据流水线/logs/
 
       - name: Verify pipeline artifacts
         run: |
           test -f vault/9_数据流水线/logs/chunks_manifest.json
           test -f vault/9_数据流水线/logs/pipeline_result.json
-          python -c "import json; m=json.load(open('vault/9_数据流水线/logs/chunks_manifest.json',encoding='utf-8')); assert len(m.get('chunks',[]))>0, 'no chunks'; print('chunks=', len(m['chunks']))"
+          python -c "import json; m=json.load(open('vault/9_数据流水线/logs/chunks_manifest.json',encoding='utf-8')); n=len(m.get('chunks',[])); f=len(m.get('files',[])); assert n>0, 'no chunks'; print(f'pipeline_ok files={f} chunks={n}')"

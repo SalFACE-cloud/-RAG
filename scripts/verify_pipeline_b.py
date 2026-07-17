@@ -49,7 +49,7 @@ def main() -> int:
                 py,
                 "services/pipeline/file_tracker.py",
                 "--scan-mode",
-                "pending",
+                "full",
                 "--vault-path",
                 vault,
                 "--ignore-path",

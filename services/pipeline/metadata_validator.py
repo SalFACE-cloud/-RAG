@@ -157,12 +157,14 @@ def _cli_root() -> Path:
     return root
 
 
-def validate_vault(vault_path: Path, ignore_patterns: list[str]) -> tuple[int, int]:
+def validate_vault(vault_path: Path, ignore_patterns: list[str]) -> dict:
     from services.pipeline.vault_paths import should_ignore
 
     invalid = 0
     valid = 0
+    errors: list[dict] = []
     validator = MetadataValidator()
+    vault_path = vault_path.resolve()
     for md in sorted(vault_path.rglob("*.md")):
         if should_ignore(md, vault_path, ignore_patterns):
             continue
@@ -172,8 +174,14 @@ def validate_vault(vault_path: Path, ignore_patterns: list[str]) -> tuple[int, i
             print(f"[OK] {md.relative_to(vault_path)}")
         else:
             invalid += 1
+            errors.append({"file": str(md.relative_to(vault_path)), "errors": result.errors})
             print(f"[FAIL] {md.relative_to(vault_path)}: {result.errors}")
-    return valid, invalid
+    return {
+        "valid": valid,
+        "invalid": invalid,
+        "errors": errors,
+        "pass": invalid == 0 and valid > 0,
+    }
 
 
 def main_cli() -> int:
@@ -194,11 +202,11 @@ def main_cli() -> int:
     vault = Path(args.vault_path).resolve()
     ignore = parse_ignore_patterns(args.ignore_path)
     append_pipeline_log(f"metadata_validator start vault={vault}")
-    valid, invalid = validate_vault(vault, ignore)
-    print(f"\nvalid={valid} invalid={invalid}")
-    ok = invalid == 0
-    write_pipeline_result("metadata_validator", ok, {"valid": valid, "invalid": invalid})
-    append_pipeline_log(f"metadata_validator done valid={valid} invalid={invalid}")
+    result = validate_vault(vault, ignore)
+    print(f"\nvalid={result['valid']} invalid={result['invalid']}")
+    ok = result["pass"]
+    write_pipeline_result("metadata_validator", ok, {"valid": result["valid"], "invalid": result["invalid"]})
+    append_pipeline_log(f"metadata_validator done valid={result['valid']} invalid={result['invalid']}")
     return 0 if ok else 1
 
 

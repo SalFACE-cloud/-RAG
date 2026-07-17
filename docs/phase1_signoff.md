@@ -5,14 +5,24 @@
 
 ## 与 Phase 2 串联
 
+**本地（Pipeline A）：**
+
 ```
 Phase 1                    Phase 2
 ────────                   ────────
 docker compose up    →     转换 → 校验 → 索引
-健康检查 (verify_phase1) →  图谱 → 检索评估 (verify_phase2)
+verify_phase1.py     →     图谱 → 检索评估 (verify_phase2)
 ```
 
-统一入口：
+**GitHub Actions（Pipeline B）：**
+
+```
+docker compose up (qdrant/postgres/redis/meilisearch)
+  → curl 健康等待
+  → metadata_validator → file_tracker → chunker → embedder(mock) → meili
+```
+
+统一本地入口：
 
 ```powershell
 python main.py pipeline
@@ -39,4 +49,6 @@ python scripts/verify_phase1.py
 
 ## GitHub Actions
 
-`.github/workflows/knowledge-pipeline.yml` 在 CI 中先跑 Phase 1，再跑 Phase 2。
+Workflow 名称：**Edu Knowledge RAG Pipeline**（`.github/workflows/knowledge-pipeline.yml`）。
+
+CI 启动 Docker 并等待 HTTP 就绪，**不运行** `verify_phase1.py`；本地验收请手动执行上述命令。

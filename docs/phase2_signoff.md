@@ -3,42 +3,43 @@
 日期：2026-07-17  
 范围：素材处理流水线（格式转换 → 元数据校验 → 索引入库 + RQ 队列）
 
-**结论：✅ PASS**（本地 `scripts/verify_phase2.py` + 全量索引/图谱/检索评估）
+**结论：✅ PASS**（本地 `verify_phase2.py` / `verify_pipeline_b.py` + 全量索引/图谱）
 
-## 本地流水线结果（2026-07-17）
+## 双流水线
 
-| 步骤 | 结果 |
-|------|------|
-| `validate_vault.py` | 8 valid / 0 invalid |
-| `rebuild_index.py` | 8 文件 indexed |
-| `main.py graph` | 8 imported, 14 Knowledge / 2 Exercise |
-| `eval_rag.py --retrieval-only` | recall@5=87.5%, MRR=0.748 |
-| Redis RQ 队列 | 连接正常 |
+| | Pipeline A（本地） | Pipeline B（CI / 分步） |
+|---|---|---|
+| 编排 | `run_pipeline.py` / `IndexerService` | 5 个独立 CLI |
+| 校验 | `metadata_validator.validate_vault()` | `metadata_validator.py --vault-path` |
+| 向量 | 真实 BGE-M3 | `--mock-embeddings` |
+| 日志 | `eval/results/pipeline_latest.json` | `vault/9_数据流水线/logs/` |
 
 ## 验收结果
 
 | 验收项 | 结果 | 状态 |
 |--------|------|------|
-| Vault YAML 校验 | 8 篇有效文档，0 失败 | ✅ |
-| 路径迁移 | `4_题库/` → `4_题库与试卷/结构化题库/高中/数学/数列/` | ✅ |
+| Vault YAML 校验 | 11 篇有效（含教材库） | ✅ |
+| 路径标准 | `4_题库与试卷/` 结构化目录 | ✅ |
 | 增量跟踪 | `file_tracker.py` + `pipeline_state.json` | ✅ |
 | RQ 队列 | Redis `pipeline` 队列可连接 | ✅ |
-| GitHub Actions | `.github/workflows/knowledge-pipeline.yml` | ✅ 已配置 |
+| GitHub Actions | `Edu Knowledge RAG Pipeline` | ✅ 已配置 |
 
 ## 命令
 
 ```powershell
-# 一键串联 Phase 1 + Phase 2
+# Pipeline A — 本地一体化
 python main.py pipeline
-python scripts/run_pipeline.py
-
-# 分步
-docker compose up -d qdrant meilisearch redis neo4j
-python scripts/verify_phase1.py
-python scripts/validate_vault.py
 python scripts/run_pipeline.py --phase2-only --force --skip-docker
 
-# RQ 队列模式
+# Pipeline B — 分步（与 CI 一致）
+python services/pipeline/metadata_validator.py --vault-path ./vault --ignore-path "0_项目文档/**"
+python services/pipeline/file_tracker.py --scan-mode full --vault-path ./vault
+python services/indexer/chunker.py --vault-path ./vault --chunk-size 512 --chunk-overlap 64
+python services/indexer/embedder.py --vault-path ./vault
+python services/indexer/meili_indexer.py
+python scripts/verify_pipeline_b.py
+
+# RQ 队列模式（Pipeline A）
 python main.py enqueue
 python main.py worker
 python scripts/verify_phase2.py
@@ -46,18 +47,14 @@ python scripts/verify_phase2.py
 
 ## CI
 
-Push 到 GitHub `main` 后自动运行 **Phase 1 → Phase 2** 串联流水线：
+Push 到 `main` 且变更 `vault/2_教材库/**` 等业务路径时触发 **Pipeline B**：
 
-1. **Phase 1**：Docker 启动 Qdrant/Meili/Redis/Neo4j → `verify_phase1.py`
-2. **Phase 2**：元数据校验 →（有 vault 变更或手动触发时）`run_pipeline.py --ci`
+1. Docker 启动 Qdrant / Postgres / Redis / Meilisearch
+2. 元数据校验 → git_diff 跟踪 → 分块 → mock 向量 → Meili 同步
+3. 上传 `vault/9_数据流水线/logs/` 为 artifact
 
-手动全量跑：`Actions → Knowledge Pipeline → Run workflow`
+**CI 不包含**：Neo4j 图谱、检索评估、真实 BGE-M3 下载。
 
-本地等价命令：
+手动触发：`Actions → Edu Knowledge RAG Pipeline → Run workflow`
 
-```powershell
-python main.py pipeline
-python scripts/run_pipeline.py --phase2-only --force --skip-docker
-```
-
-报告：`eval/results/pipeline_latest.json`、`eval/results/phase2_verify_latest.json`
+报告：`vault/9_数据流水线/logs/pipeline_result.json`、`eval/results/phase2_verify_latest.json`

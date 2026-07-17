@@ -8,8 +8,8 @@
 |------|------|
 | `0_项目文档/` | 项目说明、规范、模板 |
 | `1_政策与课标/` | 新课标、考试说明等政策类文档 |
-| `2_教材库/` | 各版本教材 Markdown |
-| `3_教辅资料/` | 讲义、知识点梳理（**当前主要样例数据在此**） |
+| `2_教材库/` | 各版本教材 Markdown（**当前样例：集合 CH01**） |
+| `3_教辅资料/` | 讲义、知识点梳理 |
 | `4_题库与试卷/` | 结构化题库与试卷（**标准目录**，含高中/初中） |
 | `5_多媒体资源/` | 音频、视频、图片、动画源文件 |
 | `6_知识图谱/` | 素养词典、映射表、Dataview 索引 |
@@ -29,8 +29,23 @@
 
 ## 索引命令
 
+**Pipeline A（一体化）：**
+
 ```powershell
 python main.py index          # 增量
 python main.py index --force  # 全量重建
 python scripts/rebuild_index.py
+python main.py pipeline       # Docker + 索引 + 图谱 + 验收
 ```
+
+**Pipeline B（分步，与 CI 一致）：**
+
+```powershell
+python services/pipeline/metadata_validator.py --vault-path ./vault --ignore-path "0_项目文档/**"
+python services/pipeline/file_tracker.py --scan-mode full --vault-path ./vault
+python services/indexer/chunker.py --vault-path ./vault
+python services/indexer/embedder.py --vault-path ./vault
+python services/indexer/meili_indexer.py
+```
+
+运行日志写入 `vault/9_数据流水线/logs/`。

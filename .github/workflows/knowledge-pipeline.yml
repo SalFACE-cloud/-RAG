@@ -1,0 +1,115 @@
+name: Knowledge Pipeline
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "vault/**"
+      - "services/pipeline/**"
+      - "services/indexer/**"
+      - "scripts/validate_vault.py"
+      - "scripts/rebuild_index.py"
+      - "requirements.txt"
+  pull_request:
+    paths:
+      - "vault/**"
+      - "services/pipeline/**"
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r services/pipeline/requirements.txt pyyaml
+
+      - name: Validate vault metadata
+        run: python scripts/validate_vault.py
+
+  detect-changes:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    outputs:
+      changed_files: ${{ steps.changed.outputs.all }}
+      has_vault_changes: ${{ steps.changed.outputs.has_vault }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: changed
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo 'all=["vault/"]' >> $GITHUB_OUTPUT
+            echo "has_vault=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          if git rev-parse HEAD^ >/dev/null 2>&1; then
+            FILES=$(git diff --name-only HEAD^ HEAD -- 'vault/' | jq -R . | jq -s .)
+          else
+            FILES='["vault/"]'
+          fi
+          echo "all=$FILES" >> $GITHUB_OUTPUT
+          if [ "$FILES" != "[]" ]; then
+            echo "has_vault=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_vault=false" >> $GITHUB_OUTPUT
+          fi
+
+  pipeline:
+    needs: [validate, detect-changes]
+    if: needs.detect-changes.outputs.has_vault_changes == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Start infrastructure
+        run: docker compose up -d qdrant meilisearch redis neo4j
+
+      - name: Wait for services
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:6333/healthz && curl -sf http://localhost:7700/health && break
+            sleep 2
+          done
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run index pipeline
+        env:
+          QDRANT_URL: http://127.0.0.1:6333
+          MEILI_URL: http://127.0.0.1:7700
+          MEILI_MASTER_KEY: edu_meili_dev_2026
+          NEO4J_URI: bolt://127.0.0.1:7687
+          NEO4J_PASSWORD: edu_neo4j_2026
+          GRAPH_ENABLED: "true"
+          REDIS_HOST: localhost
+          USE_FP16: "false"
+        run: |
+          python scripts/rebuild_index.py
+          python main.py graph
+
+      - name: Retrieval eval (no LLM)
+        env:
+          QDRANT_URL: http://127.0.0.1:6333
+          MEILI_URL: http://127.0.0.1:7700
+          MEILI_MASTER_KEY: edu_meili_dev_2026
+          USE_FP16: "false"
+        run: python scripts/eval_rag.py --retrieval-only
+
+      - name: Phase 2 verify
+        env:
+          REDIS_HOST: localhost
+        run: python scripts/verify_phase2.py

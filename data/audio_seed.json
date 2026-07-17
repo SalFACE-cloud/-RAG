@@ -1,0 +1,28 @@
+{
+  "aud-001": {
+    "id": "aud-001",
+    "title": "虚拟语气听力练习",
+    "subject": "ENG-S",
+    "audio_url": "https://oss.example.com/audio/aud-001.mp3",
+    "knowledge_ids": ["ENG-KP-03-01"],
+    "segments": [
+      {
+        "start": 0.0,
+        "end": 3.5,
+        "text": "If I were you, I would accept the offer."
+      },
+      {
+        "start": 3.5,
+        "end": 7.0,
+        "text": "This sentence uses the subjunctive mood for a contrary-to-fact condition."
+      }
+    ],
+    "questions": [
+      {
+        "id": "q1",
+        "text": "What verb form is used in the if-clause?",
+        "answer": "past subjunctive / were"
+      }
+    ]
+  }
+}

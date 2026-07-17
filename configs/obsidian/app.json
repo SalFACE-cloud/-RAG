@@ -1,0 +1,17 @@
+{
+  "legacyEditor": false,
+  "livePreview": true,
+  "defaultViewMode": "source",
+  "readableLineLength": true,
+  "strictLineBreaks": false,
+  "showFrontmatter": true,
+  "attachmentFolderPath": "5_多媒体资源/图片",
+  "newFileLocation": "folder",
+  "newFileFolderPath": "3_教辅资料",
+  "alwaysUpdateLinks": true,
+  "useMarkdownLinks": true,
+  "showLineNumber": true,
+  "tabSize": 2,
+  "foldHeading": true,
+  "foldIndent": true
+}

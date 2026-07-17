@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# IDE
+.idea/
+
+# Data
+configs/pipeline_state.json
+eval/results/
+eval/sources_manifest.json
+index_output.log
+index_result.txt
+eval_result.txt
+manifest_result.txt
+*.log
+
+# Models cache
+.cache/
+models/
+
+# Docker volumes (local)
+qdrant_data/
+meili_data/

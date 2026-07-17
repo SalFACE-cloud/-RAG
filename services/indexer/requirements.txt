@@ -1,0 +1,5 @@
+qdrant-client>=1.8.0
+FlagEmbedding>=1.2.10
+numpy>=1.26.0
+neo4j>=5.20.0
+requests>=2.31.0

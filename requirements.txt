@@ -1,0 +1,4 @@
+# 根依赖：安装全部模块（pip install -r requirements.txt）
+-r services/pipeline/requirements.txt
+-r services/indexer/requirements.txt
+-r services/api/requirements.txt
